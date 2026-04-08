@@ -3,9 +3,4 @@ name = "openenv-agent"
 version = "0.1.0"
 description = "OpenEnv biological optimization agent"
 requires-python = ">=3.10"
-dependencies = [
-    "openai",
-    "requests",
-    "aiohttp",
-]
-
+dependencies = ["openai", "requests", "aiohttp"]
