@@ -26,13 +26,11 @@ dependencies = [
     # "gymnasium>=0.29.0",
     # "openspiel>=1.0.0",
     # "smolagents>=1.22.0,<2",
+    "httpx>=0.24.0",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.0.0",
-]
+dev = ["pytest>=8.0.0", "pytest-cov>=4.0.0"]
 
 [project.scripts]
 # Server entry point - enables running via: uv run --project . server

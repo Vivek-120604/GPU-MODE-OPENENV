@@ -36,6 +36,9 @@ class MyObservation(Observation):
     task_score: float = Field(ge=0.0, le=1.0, description="Task score in [0, 1]")
     success: bool = Field(description="Whether the task success condition is satisfied")
     success_condition: str = Field(description="Human-readable success condition")
+    done: bool = Field(default=False, description="Whether the episode has terminated")
+    reward: float = Field(default=0.0, description="Reward received for the last action")
+    metadata: dict = Field(default_factory=dict, description="Extra debug info")
 
 
 class MyState(State):

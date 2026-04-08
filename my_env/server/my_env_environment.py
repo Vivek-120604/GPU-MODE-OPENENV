@@ -72,6 +72,7 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
 
     def __init__(self):
         """Initialize environment with deterministic defaults."""
+        self.last_actions: list[int] = []
         self._last_seed: int = 0
         self._active_task: str = "medium"
         self._seen_actions: set[int] = set()
@@ -256,6 +257,7 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
         self._last_action = None
         self._action_streak = 0
         self._episode_done = False
+        self.last_actions = []
         self._last_reward_components = {
             "prev_distance": 0.0,
             "new_distance": 0.0,
@@ -272,8 +274,6 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
         self._state.steps_remaining = max(10, int(self._state.steps_remaining))
         self._state.step_count = 0
         self._state.previous_score = 0.0
-        
-        print(f"DEBUG RESET: steps_remaining={self._state.steps_remaining}, success={self._state.success}")
 
         return self._build_observation(
             reward=0.0,
@@ -333,9 +333,6 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
 
         reward -= 0.002
 
-        if not hasattr(self, "last_actions"):
-            self.last_actions = []
-
         if (
             len(self.last_actions) >= 2
             and self.last_actions[-1] == action.action_id
@@ -365,6 +362,8 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
         self._state.task_score = self._score_from_distance(new_distance)
         self._state.previous_distance = prev_distance
 
+        reward = max(-1.0, min(1.0, reward))
+
         self._last_reward_components = {
             "prev_distance": round(prev_distance, 6),
             "new_distance": round(new_distance, 6),
@@ -373,8 +372,7 @@ class MyEnvironment(Environment[MyAction, MyObservation, MyState]):
             "run_experiment_override": round(reward, 6) if action.action_id == 5 else 0.0,
         }
 
-        self._state.previous_score = reward
-        print(f"DEBUG: prev={prev_distance:.2f}, new={new_distance:.2f}, delta={delta:.2f}, reward={reward:.2f}")
+        self._state.previous_score = self._state.task_score
 
         return self._build_observation(
             reward=reward,

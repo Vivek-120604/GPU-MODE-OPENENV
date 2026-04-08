@@ -1,7 +1,60 @@
 spec_version: 1
 name: my_env
-type: space
-runtime: fastapi
-app: server.app:app
-port: 8000
-
+version: "1.0.0"
+description: >
+  Adaptive experimental design environment where an agent optimizes
+  temperature, pH, and mutation level to maximize biological yield.
+  Real-world simulation of lab experiment optimization.
+tags:
+  - openenv
+  - real-world
+  - science
+  - biology
+tasks:
+  - name: easy
+    difficulty: easy
+    max_episode_steps: 6
+    success_threshold: 0.98
+    description: "Reach optimal state within 3 steps and run experiment."
+  - name: medium
+    difficulty: medium
+    max_episode_steps: 20
+    success_threshold: 0.90
+    description: "Reach optimal state using at least 3 distinct actions over 6+ steps."
+  - name: hard
+    difficulty: hard
+    max_episode_steps: 30
+    success_threshold: 0.95
+    description: "Reach optimal state using actions 0, 3, 4 over 20+ steps."
+action_space:
+  type: discrete
+  n: 6
+  description: "0=increase_temp, 1=decrease_temp, 2=increase_pH, 3=decrease_pH, 4=mutate_sequence, 5=run_experiment"
+observation_space:
+  type: structured
+  fields:
+    - name: temperature
+      type: float
+    - name: pH
+      type: float
+    - name: mutation_level
+      type: int
+    - name: task_score
+      type: float
+      range: [0.0, 1.0]
+    - name: steps_remaining
+      type: int
+    - name: done
+      type: bool
+    - name: reward
+      type: float
+    - name: success
+      type: bool
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  health: GET /health
+docker:
+  port: 8000
+  dockerfile: Dockerfile
