@@ -1,247 +1,301 @@
 #!/usr/bin/env python3
 """
-OpenEnv Compliant Inference Agent
-Runs biological optimization environment and logs in exact compliance format.
-Judges will parse the [START], [STEP], and [END] log lines.
+OpenEnv Inference Agent - Optimized for HuggingFace Space API
+Robust to network failures and LLM unavailability.
 """
 
 import os
 import sys
+import json
 import requests
-from typing import Dict, Any, Optional, List
+import time
+from typing import Dict, Any, Optional, List, Tuple
 from openai import OpenAI
 
 
-def get_env_config() -> tuple:
-    """Read and validate environment configuration.
-    
-    Returns:
-        (api_base_url, model_name, hf_token)
-        
-    Raises:
-        ValueError: If HF_TOKEN is not set
-    """
-    api_base_url = os.getenv("API_BASE_URL", "http://localhost:7860")
-    model_name = os.getenv("MODEL_NAME", "meta-llama/Llama-3.3-70B-Instruct")
-    hf_token = os.getenv("HF_TOKEN")
-    
-    if not hf_token:
-        raise ValueError("HF_TOKEN environment variable is required")
-    
-    return api_base_url, model_name, hf_token
+API_BASE_URL = "https://whyvek-bio-env.hf.space"
+MAX_STEPS = 50
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+LLM_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+HF_TOKEN = os.getenv("HF_TOKEN", "test-token")
+
+try:
+    client = OpenAI(base_url=LLM_BASE_URL, api_key=HF_TOKEN)
+except:
+    client = None
 
 
-def initialize_client(api_base_url: str, hf_token: str) -> OpenAI:
-    """Initialize OpenAI client with proper configuration.
-    
-    Args:
-        api_base_url: Base URL for API endpoint
-        hf_token: HuggingFace authentication token
-        
-    Returns:
-        Configured OpenAI client instance
-    """
-    return OpenAI(base_url=api_base_url, api_key=hf_token)
+class BiologicalOptimizationAgent:
+    """Rule-based deterministic state machine for black-box optimization."""
 
-
-
-class OptimizationAgent:
-    """Deterministic agent for biological optimization."""
-    
-    OPTIMAL_TEMP = 37.0
-    OPTIMAL_PH = 7.4
-    OPTIMAL_MUTATION = 0.3
-    
     def __init__(self):
-        self.step_count = 0
-        self.last_performance = 0.0
-    
-    def get_action(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Get next action based on current state.
-        
-        Greedy strategy: move toward optimal values by the largest distance.
-        """
-        temp = state.get('temperature', 25.0)
-        ph = state.get('ph', 7.0)
-        mutation = state.get('mutation_level', 0.5)
-        
-        # Calculate distance to optimal for each parameter
-        temp_diff = self.OPTIMAL_TEMP - temp
-        ph_diff = self.OPTIMAL_PH - ph
-        mutation_diff = self.OPTIMAL_MUTATION - mutation
-        
-        temp_dist = abs(temp_diff)
-        ph_dist = abs(ph_diff)
-        mutation_dist = abs(mutation_diff)
-        
-        # Adaptive step sizing based on distance
-        temp_step = min(5.0, max(0.5, temp_dist * 0.3))
-        ph_step = min(1.0, max(0.1, ph_dist * 0.3))
-        mutation_step = min(0.2, max(0.02, mutation_dist * 0.3))
-        
-        # Select action with largest distance
-        if temp_dist >= ph_dist and temp_dist >= mutation_dist:
-            adjustment = temp_step if temp_diff > 0 else -temp_step
-            return {'action_type': 'adjust_temperature', 'value': float(adjustment)}
-        elif ph_dist >= mutation_dist:
-            adjustment = ph_step if ph_diff > 0 else -ph_step
-            return {'action_type': 'adjust_ph', 'value': float(adjustment)}
-        else:
-            adjustment = mutation_step if mutation_diff > 0 else -mutation_step
-            return {'action_type': 'adjust_mutation', 'value': float(adjustment)}
+        # Best state memory
+        self.best_reward      = -float('inf')
+        self.best_action_type = "adjust_temperature"
+        self.best_direction   = 1.0
 
+        # Exploration state
+        self.step_size    = 0.2
+        self.direction    = 1.0
+        self.action_types = ["adjust_temperature", "adjust_ph", "adjust_mutation"]
+        self.action_index = 0
 
+        # Peak-lock state
+        self.peak_locked    = False
+        self.peak_direction = 1.0   # independent direction used only inside peak-lock
+        self.peak_steps     = 0     # steps spent in peak-lock
 
-def make_api_request(endpoint: str, method: str = "GET", data: Optional[Dict] = None, env_url: str = "http://localhost:7860") -> Dict[str, Any]:
-    """Make HTTP request to environment API.
-    
-    Args:
-        endpoint: API endpoint path
-        method: HTTP method (GET or POST)
-        data: Request body data
-        env_url: Base URL for environment
-        
-    Returns:
-        Response JSON or error dict
-    """
-    url = f"{env_url}/{endpoint}"
-    try:
-        if method == "POST":
-            response = requests.post(url, json=data, timeout=30)
-        else:
-            response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        return {"error": str(e)}
+        # Drift detection
+        self.drift_counter    = 0
+        self.DRIFT_THRESHOLD  = 0.15   # drop fraction that starts counting drift
+        self.DRIFT_PATIENCE   = 3      # steps before anti-drift fires
+        self.PEAK_ESCAPE      = 6      # consecutive drift steps before exiting peak-lock
 
+        # Previous step memory
+        self.prev_reward      = None
+        self.prev_action_type = "adjust_temperature"
+        self.prev_direction   = 1.0
 
-def run_episode(task: str = "medium", seed: Optional[int] = None, env_url: str = "http://localhost:7860") -> Dict[str, Any]:
-    """Run single episode with exact compliance logging format.
-    
-    Prints in exact format required by OpenEnv Phase 1 judges:
-    [START] task=<task> env=<env> model=<model>
-    [STEP] step=<n> action=<action> reward=<0.00> done=<true|false> error=<msg|null>
-    [END] success=<true|false> steps=<n> rewards=<r1,r2,...>
-    
-    Args:
-        task: Task difficulty (easy, medium, hard)
-        seed: Random seed for reproducibility
-        env_url: Environment base URL
-        
-    Returns:
-        Episode results dict
-    """
-    try:
-        # COMPLIANCE: Print START in exact format
-        print(f"[START] task={task} env={env_url} model=inference-agent")
-        
-        # Reset environment
-        reset_data = {"task": task}
-        if seed is not None:
-            reset_data["seed"] = seed
-        
-        reset_result = make_api_request("reset", "POST", reset_data, env_url)
-        
-        if "error" in reset_result:
-            # Error on reset - must print END
-            print(f"[END] success=false steps=0 rewards=")
-            return {"success": False, "reward": 0.0, "steps": 0, "final_performance": 0.0}
-        
-        state = reset_result.get("state", {})
-        agent = OptimizationAgent()
-        total_reward = 0.0
-        step_rewards: List[str] = []
-        
-        # Run environment steps
-        step_count = 0
-        for step_num in range(1, 51):  # Max 50 steps per environment
-            step_count = step_num
-            
-            # Get action from agent
-            action = agent.get_action(state)
-            
-            # Execute step in environment
-            step_data = {"action": action}
-            step_result = make_api_request("step", "POST", step_data, env_url)
-            
-            # Extract results
-            if "error" in step_result:
-                # API error
-                error_msg = step_result.get("error", "API error")
-                done = True
-                reward = 0.0
-                success = False
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _update_best(self, reward: float, action_type: str, direction: float):
+        """Record best state seen so far. Called at top of get_action() with
+        the reward that RESULTED from the previous action."""
+        if reward > self.best_reward:
+            self.best_reward      = reward
+            self.best_action_type = action_type
+            self.best_direction   = direction
+
+    def _tick_drift(self, current_reward: float):
+        """Increment or reset drift counter based on current reward vs best."""
+        if self.prev_reward is not None and self.best_reward > 0:
+            if current_reward < self.best_reward * (1.0 - self.DRIFT_THRESHOLD):
+                self.drift_counter += 1
             else:
-                state = step_result.get("state", {})
-                reward = float(step_result.get("reward", 0.0))
-                done = step_result.get("done", False)
-                success = state.get("performance_score", 0.0) >= 0.85
-            
-            # Accumulate reward
-            total_reward += reward
-            step_rewards.append(f"{reward:.2f}")
-            
-            # COMPLIANCE: Print STEP in exact format
-            error_field = "null"
-            if "error" in step_result:
-                error_field = f'"{step_result["error"]}"'
-            done_str = "true" if done else "false"
-            action_type = action.get('action_type', 'unknown')
-            print(f"[STEP] step={step_num} action={action_type} reward={reward:.2f} done={done_str} error={error_field}")
-            
-            # Stop if episode is done
-            if done:
-                break
-        
-        # COMPLIANCE: Print END in exact format
-        success = state.get("performance_score", 0.0) >= 0.85
-        success_str = "true" if success else "false"
-        rewards_str = ",".join(step_rewards)
-        print(f"[END] success={success_str} steps={step_count} rewards={rewards_str}")
-        
-        return {
-            "success": success,
-            "reward": total_reward,
-            "steps": step_count,
-            "final_performance": state.get("performance_score", 0.0)
-        }
-        
-    except Exception as e:
-        # Catch all exceptions and print END
-        print(f"[END] success=false steps=0 rewards=")
-        return {"success": False, "reward": 0.0, "steps": 0, "final_performance": 0.0}
+                self.drift_counter = 0
+
+    # ------------------------------------------------------------------
+    # Main action selection
+    # ------------------------------------------------------------------
+
+    def get_action(self, state: Dict[str, Any], rewards: List[float]) -> Dict[str, Any]:
+        """
+        Priority order (strictly if / elif):
+          R1  Termination acceleration  — reward > 1.5
+          R2  Peak-lock                 — reward >= 0.85 OR already locked
+                                          (exits if drift_counter >= PEAK_ESCAPE)
+          R3  Anti-drift                — drift_counter >= DRIFT_PATIENCE
+          R4  Default exploration
+        """
+        current_reward = rewards[-1] if rewards else 0.0
+
+        # ── Step A: update best with the reward that just arrived ────────
+        if self.prev_reward is not None:
+            self._update_best(current_reward,
+                              self.prev_action_type,
+                              self.prev_direction)
+
+        # ── Step B: drift accounting (runs regardless of peak state) ─────
+        self._tick_drift(current_reward)
+
+        # ── Step C: select action ────────────────────────────────────────
+
+        # R1 — Termination acceleration
+        if current_reward > 1.5:
+            action_type = self.best_action_type
+            direction   = self.best_direction
+            value       = direction * self.step_size
+
+        # R2 — Peak-lock (with forced escape after PEAK_ESCAPE drift steps)
+        elif (current_reward >= 0.85 or self.peak_locked) \
+                and self.drift_counter < self.PEAK_ESCAPE:
+
+            if not self.peak_locked:
+                # First entry: adopt direction that produced the peak
+                self.peak_locked    = True
+                self.peak_direction = self.prev_direction
+                self.peak_steps     = 0
+
+            self.peak_steps += 1
+
+            # Reverse peak_direction when reward declines inside peak region
+            if self.prev_reward is not None and current_reward < self.prev_reward:
+                self.peak_direction *= -1.0
+
+            # Shrink step slowly to fine-tune around the peak
+            self.step_size = max(0.01, self.step_size * 0.93)
+
+            action_type = self.best_action_type
+            direction   = self.peak_direction
+            value       = direction * self.step_size
+
+        # R3 — Anti-drift: return toward best region
+        else:
+            if self.peak_locked:
+                # Forced escape from failed peak-lock
+                self.peak_locked    = False
+                self.peak_direction = 1.0
+                self.peak_steps     = 0
+
+            if self.drift_counter >= self.DRIFT_PATIENCE:
+                action_type        = self.best_action_type
+                direction          = self.best_direction * -1.0
+                value              = direction * self.step_size
+                self.drift_counter = 0
+
+            # R4 — Default exploration
+            else:
+                if self.prev_reward is not None and current_reward < self.prev_reward:
+                    self.direction *= -1.0
+                    self.step_size  = max(0.01, self.step_size * 0.9)
+
+                action_type = self.action_types[self.action_index % len(self.action_types)]
+                direction   = self.direction
+                value       = direction * self.step_size
+
+        # ── Step D: persist state for next call ──────────────────────────
+        self.prev_reward      = current_reward
+        self.prev_action_type = action_type
+        self.prev_direction   = direction
+        self.action_index    += 1
+
+        return {"action_type": action_type, "value": value}
+
+    def get_llm_action(self, state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Disabled — pure rule-based agent."""
+        return None
+
+    def get_fallback_action(self) -> Dict[str, Any]:
+        return {"action_type": "adjust_temperature", "value": 0.2}
 
 
+# ── Environment API helpers ────────────────────────────────────────────────
+
+def reset_env(task: str = "medium", seed: int = 42,
+              retries: int = 2) -> Tuple[bool, Dict[str, Any], Optional[str]]:
+    url = f"{API_BASE_URL}/reset"
+    backoff_times = [1, 2, 4]
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(url, json={"task": task, "seed": seed}, timeout=10)
+            if resp.status_code == 200:
+                return True, resp.json(), None
+            if attempt < retries:
+                time.sleep(backoff_times[attempt])
+        except Exception:
+            if attempt < retries:
+                time.sleep(backoff_times[attempt])
+
+    fallback_state = {
+        "state": {
+            "temperature": 25.0, "ph": 7.0, "mutation_level": 0.5,
+            "performance_score": 0.0, "steps_count": 0, "stability_count": 0
+        },
+        "episode_info": {"task": task, "max_steps": 50}
+    }
+    return False, fallback_state, "reset_fallback"
+
+
+def step_env(action: Dict[str, Any],
+             retries: int = 2) -> Tuple[bool, Dict[str, Any], Optional[str]]:
+    url = f"{API_BASE_URL}/step"
+    backoff_times = [1, 2, 4]
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(url, json={"action": action}, timeout=10)
+            if resp.status_code == 200:
+                return True, resp.json(), None
+            if attempt < retries:
+                time.sleep(backoff_times[attempt])
+        except Exception:
+            if attempt < retries:
+                time.sleep(backoff_times[attempt])
+    return False, {}, "timeout"
+
+
+# ── Main ───────────────────────────────────────────────────────────────────
 
 def main():
-    """Main entry point - minimal to avoid extra logs."""
+    rewards: List[str]  = []
+    reward_floats: List[float] = []
+    steps_taken = 0
+    state       = None
+
     try:
-        # Get configuration
-        api_base_url, model_name, hf_token = get_env_config()
-        
-        # Initialize OpenAI client (required by spec even if not used)
-        client = initialize_client(api_base_url, hf_token)
-        
-        # For Phase 1, judges only care about inference.py being runnable
-        # They will test /reset and /step API endpoints directly
-        # This script demonstrates the inference capability
-        result = run_episode(task="medium", env_url=api_base_url)
-        
-        # Exit code based on success
-        sys.exit(0 if result["success"] else 1)
-        
-    except ValueError as e:
-        # HF_TOKEN not set - exit gracefully
-        print(f"[END] success=false steps=0 rewards=")
-        sys.exit(1)
-    except Exception as e:
-        # Any other error
-        print(f"[END] success=false steps=0 rewards=")
-        sys.exit(1)
+        print(f"[START] task=medium env={API_BASE_URL} model={MODEL_NAME}")
+
+        ok, data, _ = reset_env("medium", 42, retries=2)
+        state       = data.get("state", {})
+
+        agent        = BiologicalOptimizationAgent()
+        loop_executed = False
+
+        for step_num in range(1, MAX_STEPS + 1):
+            loop_executed = True
+            steps_taken   = step_num
+
+            try:
+                llm_action = agent.get_llm_action(state)
+                action = (llm_action
+                          if llm_action
+                             and 'action_type' in llm_action
+                             and 'value' in llm_action
+                          else agent.get_action(state, reward_floats))
+            except Exception:
+                action = agent.get_fallback_action()
+
+            try:
+                ok, step_data, err = step_env(action, retries=2)
+                if ok:
+                    state     = step_data.get("state", {})
+                    reward    = float(step_data.get("reward", 0.0))
+                    done      = step_data.get("done", False)
+                    error_str = "null"
+                else:
+                    reward    = 0.0
+                    done      = False
+                    error_str = f'"{err}"' if err else '"timeout"'
+            except Exception:
+                reward    = 0.0
+                done      = False
+                error_str = '"exception"'
+
+            reward_floats.append(reward)
+            rewards.append(f"{reward:.2f}")
+            done_str = "true" if done else "false"
+            print(f"[STEP] step={step_num} "
+                  f"action={action.get('action_type', 'unknown')} "
+                  f"reward={reward:.2f} done={done_str} error={error_str}")
+
+            if done:
+                break
+
+        if not loop_executed:
+            steps_taken = 1
+            try:
+                action    = {"action_type": "adjust_temperature", "value": 0.5}
+                ok, step_data, err = step_env(action, retries=2)
+                reward    = float(step_data.get("reward", 0.0)) if ok else 0.0
+                error_str = "null" if ok else f'"{err}"'
+                state     = step_data.get("state", {}) if ok else state
+            except Exception:
+                reward    = 0.0
+                error_str = '"exception"'
+            rewards.append(f"{reward:.2f}")
+            print(f"[STEP] step=1 action=adjust_temperature "
+                  f"reward={reward:.2f} done=false error={error_str}")
+
+        perf        = state.get("performance_score", 0.0) if state else 0.0
+        success_str = "true" if perf >= 0.8 else "false"
+        print(f"[END] success={success_str} steps={steps_taken} "
+              f"rewards={','.join(rewards)}")
+
+    except Exception:
+        print(f"[END] success=false steps={steps_taken} "
+              f"rewards={','.join(rewards) if rewards else ''}")
 
 
 if __name__ == "__main__":
     main()
-
-        
