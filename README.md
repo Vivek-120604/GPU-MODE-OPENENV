@@ -1,3 +1,12 @@
+---
+title: Bio Optimization Env
+emoji: 🧬
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # BiologicalOptimizationEnv
 
 A complete OpenEnv environment for biological experiment optimization using reinforcement learning and language models.
