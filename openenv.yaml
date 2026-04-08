@@ -1,0 +1,186 @@
+# BiologicalOptimizationEnv OpenEnv Configuration
+title: "Biological Experiment Optimization"
+description: "Optimize biological experiment conditions (temperature, pH, mutation) to achieve target performance"
+version: "1.0.0"
+
+environment:
+  type: "python"
+  module: "server.environment"
+  class: "BiologicalOptimizationEnv"
+  base: "openenv_api.BaseEnvironment"
+
+tasks:
+  - name: "easy"
+    description: "Easy task with close initial conditions"
+    params:
+      task: "easy"
+      seed: null
+    config:
+      initial_state:
+        temperature: 35.0
+        ph: 7.2
+        mutation_level: 0.25
+        performance_score: 0.0
+        steps_count: 0
+        stability_count: 0
+      max_steps: 50
+      timeout: 300
+    grader:
+      type: "threshold"
+      metric: "final_performance_score"
+      threshold: 0.8
+      tolerance: 0.001
+
+  - name: "medium"
+    description: "Medium task with random initialization"
+    params:
+      task: "medium"
+      seed: null
+    config:
+      initial_state:
+        temperature: "random[20, 35]"
+        ph: "random[6.0, 8.0]"
+        mutation_level: "random[0.2, 0.7]"
+        performance_score: 0.0
+        steps_count: 0
+        stability_count: 0
+      max_steps: 50
+      timeout: 300
+    grader:
+      type: "threshold"
+      metric: "final_performance_score"
+      threshold: 0.75
+      tolerance: 0.001
+
+  - name: "hard"
+    description: "Hard task with challenging initial conditions"
+    params:
+      task: "hard"
+      seed: null
+    config:
+      initial_state:
+        temperature: 20.0
+        ph: 6.0
+        mutation_level: 0.8
+        performance_score: 0.0
+        steps_count: 0
+        stability_count: 0
+      max_steps: 50
+      timeout: 300
+      constraints:
+        - "temperature range: [15, 45]"
+        - "pH range: [5, 9]"
+        - "mutation range: [0, 1]"
+        - "tight convergence tolerance required"
+    grader:
+      type: "threshold"
+      metric: "final_performance_score"
+      threshold: 0.7
+      tolerance: 0.001
+
+server:
+  host: "0.0.0.0"
+  port: 7860
+  endpoints:
+    - path: "/reset"
+      method: "POST"
+      description: "Reset environment to initial state"
+    - path: "/step"
+      method: "POST"
+      description: "Execute one step in the environment"
+    - path: "/state"
+      method: "GET"
+      description: "Get current environment state"
+    - path: "/"
+      method: "GET"
+      description: "Health check"
+
+metrics:
+  - name: "final_performance_score"
+    description: "Final performance score achieved (0-1)"
+    type: "float"
+  - name: "total_steps"
+    description: "Total number of steps taken"
+    type: "integer"
+  - name: "total_reward"
+    description: "Cumulative reward over episode"
+    type: "float"
+  - name: "success"
+    description: "Whether the task was successfully completed"
+    type: "boolean"
+
+state_space:
+  temperature:
+    type: "float"
+    min: 15.0
+    max: 45.0
+    description: "Temperature in Celsius"
+  ph:
+    type: "float"
+    min: 5.0
+    max: 9.0
+    description: "pH level"
+  mutation_level:
+    type: "float"
+    min: 0.0
+    max: 1.0
+    description: "Mutation level in normalized range"
+  performance_score:
+    type: "float"
+    min: 0.0
+    max: 1.0
+    description: "Performance score based on condition optimization"
+  steps_count:
+    type: "integer"
+    description: "Number of steps taken in current episode"
+  stability_count:
+    type: "integer"
+    description: "Number of consecutive stable steps"
+
+action_space:
+  action_type:
+    type: "string"
+    options:
+      - "adjust_temperature"
+      - "adjust_ph"
+      - "adjust_mutation"
+      - "run_experiment"
+    description: "Type of action to execute"
+  value:
+    type: "float"
+    description: "Adjustment value (ignored for run_experiment)"
+    ranges:
+      adjust_temperature: [-5.0, 5.0]
+      adjust_ph: [-1.0, 1.0]
+      adjust_mutation: [-0.2, 0.2]
+      run_experiment: [0.0, 0.0]
+
+reward_function:
+  type: "potential_based_shaping"
+  components:
+    - name: "performance_delta"
+      weight: 0.5
+      description: "Change in performance score"
+    - name: "stability_bonus"
+      value: 0.1
+      condition: "stability_count >= 2"
+      description: "Bonus for maintaining stable conditions"
+    - name: "experiment_success_bonus"
+      value: 0.5
+      condition: "run_experiment action with success"
+      description: "Bonus for successful experiment execution"
+    - name: "experiment_failure_penalty"
+      value: -0.5
+      condition: "run_experiment action without success"
+      description: "Penalty for premature experiment"
+  range: [-1.0, 1.0]
+
+termination_conditions:
+  - name: "success"
+    description: "Performance >= 0.85 AND stability >= 2 steps"
+    condition: "performance_score >= 0.85 and stability_count >= 2"
+    terminal: true
+  - name: "max_steps"
+    description: "Maximum steps reached"
+    condition: "steps_count >= max_steps"
+    terminal: true
