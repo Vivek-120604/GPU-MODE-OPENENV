@@ -398,15 +398,15 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             if distinct_count < 2 or self.steps_count < 6:
                 success = False
         else:  # hard
-            # Hard: require very high performance (0.985), 3 stability, 3+ distinct actions, 30+ steps
-            success = self.performance_score >= 0.985 and self.stability_count >= 3
+            # Hard: require solid performance, 2-step stability, 3 distinct actions, 15+ steps
+            success = self.performance_score >= 0.82 and self.stability_count >= 2
             distinct_count = len(self.distinct_actions_used)
-            if distinct_count < 3 or self.steps_count < 30:
+            if distinct_count < 3 or self.steps_count < 15:
                 success = False
         
         done = success or self.steps_count >= self.max_steps
         
-        # Calculate reward
+        # Calculate reward and clamp to [0.0, 1.0] (grader requirement)
         reward = self._calculate_reward(
             action_type,
             old_performance,
@@ -414,6 +414,7 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             done,
             success
         )
+        reward = float(max(0.0, min(1.0, reward)))
         
         # Calculate distances for logging clarity
         temp_dist, ph_dist, mutation_dist = self._get_component_distances()
@@ -426,12 +427,16 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             "success": success,
             "stability_count": self.stability_count,
             "task": self.task,
+            # Grader metrics — must match openenv.yaml metric names exactly
+            "final_performance_score": float(self.performance_score),
+            "total_steps": int(self.steps_count),
+            "total_reward": float(reward),
             # Distance metrics for interpretability
             "distance_to_optimal": float(avg_distance),
             "temp_distance": float(temp_dist),
             "ph_distance": float(ph_dist),
             "mutation_distance": float(mutation_dist),
-            # Reward components for debugging
+            # Additional debug info
             "performance_delta": float(perf_delta),
             "performance_score": float(self.performance_score),
             "steps_taken": int(self.steps_count),

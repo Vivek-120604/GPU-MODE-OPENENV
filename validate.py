@@ -30,7 +30,7 @@ def test_imports():
         from server.app import app
         print("✓ FastAPI app imported")
         
-        from inference import BiologicalOptimizationInference
+        from inference import BiologicalOptimizationAgent
         print("✓ Inference client imported")
         
         return True
@@ -255,16 +255,26 @@ def test_inference_client():
     
     try:
         os.environ['HF_TOKEN'] = 'test_token'
-        from inference import BiologicalOptimizationInference
+        from inference import BiologicalOptimizationAgent, ENV_BASE_URL, MODEL_NAME, MAX_STEPS
         
-        inference = BiologicalOptimizationInference()
+        agent = BiologicalOptimizationAgent()
         
-        print(f"✓ Model: {inference.model}")
-        print(f"✓ Base URL: {inference.base_url}")
-        print(f"✓ Optimal temperature: {inference.optimal_temp}°C")
-        print(f"✓ Optimal pH: {inference.optimal_ph}")
-        print(f"✓ Optimal mutation: {inference.optimal_mutation}")
-        print(f"✓ Max steps: {inference.max_steps}")
+        # Verify agent has required methods
+        assert hasattr(agent, 'get_action'),        "Missing get_action"
+        assert hasattr(agent, 'get_llm_action'),    "Missing get_llm_action"
+        assert hasattr(agent, 'get_fallback_action'), "Missing get_fallback_action"
+        
+        print(f"✓ Agent class: BiologicalOptimizationAgent")
+        print(f"✓ ENV_BASE_URL: {ENV_BASE_URL}")
+        print(f"✓ MODEL_NAME:   {MODEL_NAME}")
+        print(f"✓ MAX_STEPS:    {MAX_STEPS}")
+        
+        # Smoke-test action generation
+        dummy_state = {"temperature": 30.0, "ph": 7.0, "mutation_level": 0.5,
+                       "performance_score": 0.4, "steps_count": 1, "stability_count": 0}
+        action = agent.get_action(dummy_state, [0.3])
+        assert 'action_type' in action and 'value' in action, "Bad action dict"
+        print(f"✓ get_action smoke-test passed: {action}")
         
         return True
     

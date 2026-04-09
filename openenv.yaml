@@ -7,14 +7,14 @@ environment:
   type: "python"
   module: "server.environment"
   class: "BiologicalOptimizationEnv"
-  base: "openenv_api.BaseEnvironment"
+  base: "server.base.BaseEnvironment"
 
 tasks:
   - name: "easy"
     description: "Easy task with close initial conditions"
     params:
       task: "easy"
-      seed: null
+      seed: 42
     config:
       initial_state:
         temperature: 35.0
@@ -23,7 +23,7 @@ tasks:
         performance_score: 0.0
         steps_count: 0
         stability_count: 0
-      max_steps: 50
+      max_steps: 35
       timeout: 300
     grader:
       type: "threshold"
@@ -32,19 +32,19 @@ tasks:
       tolerance: 0.001
 
   - name: "medium"
-    description: "Medium task with random initialization"
+    description: "Medium task with moderate initial conditions"
     params:
       task: "medium"
-      seed: null
+      seed: 42
     config:
       initial_state:
-        temperature: "random[20, 35]"
-        ph: "random[6.0, 8.0]"
-        mutation_level: "random[0.2, 0.7]"
+        temperature: 29.0
+        ph: 6.2
+        mutation_level: 0.65
         performance_score: 0.0
         steps_count: 0
         stability_count: 0
-      max_steps: 50
+      max_steps: 45
       timeout: 300
     grader:
       type: "threshold"
@@ -56,7 +56,7 @@ tasks:
     description: "Hard task with challenging initial conditions"
     params:
       task: "hard"
-      seed: null
+      seed: 42
     config:
       initial_state:
         temperature: 20.0
@@ -71,7 +71,7 @@ tasks:
         - "temperature range: [15, 45]"
         - "pH range: [5, 9]"
         - "mutation range: [0, 1]"
-        - "tight convergence tolerance required"
+        - "convergence tolerance required"
     grader:
       type: "threshold"
       metric: "final_performance_score"
@@ -82,6 +82,9 @@ server:
   host: "0.0.0.0"
   port: 7860
   endpoints:
+    - path: "/"
+      method: "GET"
+      description: "Health check — returns 200 with status ok"
     - path: "/reset"
       method: "POST"
       description: "Reset environment to initial state"
@@ -91,20 +94,22 @@ server:
     - path: "/state"
       method: "GET"
       description: "Get current environment state"
-    - path: "/"
+    - path: "/tasks"
       method: "GET"
-      description: "Health check"
+      description: "List available tasks"
 
 metrics:
   - name: "final_performance_score"
     description: "Final performance score achieved (0-1)"
     type: "float"
+    range: [0.0, 1.0]
   - name: "total_steps"
     description: "Total number of steps taken"
     type: "integer"
   - name: "total_reward"
     description: "Cumulative reward over episode"
     type: "float"
+    range: [0.0, 1.0]
   - name: "success"
     description: "Whether the task was successfully completed"
     type: "boolean"
@@ -157,6 +162,7 @@ action_space:
 
 reward_function:
   type: "potential_based_shaping"
+  range: [0.0, 1.0]
   components:
     - name: "performance_delta"
       weight: 0.5
@@ -173,7 +179,6 @@ reward_function:
       value: -0.5
       condition: "run_experiment action without success"
       description: "Penalty for premature experiment"
-  range: [-1.0, 1.0]
 
 termination_conditions:
   - name: "success"

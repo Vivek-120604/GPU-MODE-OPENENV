@@ -40,11 +40,35 @@ env: Optional[BiologicalOptimizationEnv] = None
 
 @app.get("/", tags=["health"])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint — must return 200 for HF Space ping"""
     return {
         "status": "ok",
         "service": "BiologicalOptimizationEnv",
         "version": "1.0.0",
+    }
+
+
+@app.get("/tasks", tags=["environment"])
+def list_tasks():
+    """Return all available tasks — required by OpenEnv spec validators"""
+    return {
+        "tasks": [
+            {
+                "name": "easy",
+                "description": "Easy task with close initial conditions",
+                "grader": {"metric": "final_performance_score", "threshold": 0.8},
+            },
+            {
+                "name": "medium",
+                "description": "Medium task with moderate initial conditions",
+                "grader": {"metric": "final_performance_score", "threshold": 0.75},
+            },
+            {
+                "name": "hard",
+                "description": "Hard task with challenging initial conditions",
+                "grader": {"metric": "final_performance_score", "threshold": 0.7},
+            },
+        ]
     }
 
 
