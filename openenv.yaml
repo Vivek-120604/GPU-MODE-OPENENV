@@ -21,7 +21,7 @@ tasks:
         temperature: 35.0
         ph: 7.2
         mutation_level: 0.25
-        performance_score: 0.0
+        performance_score: 0.001
         steps_count: 0
         stability_count: 0
       max_steps: 35
@@ -43,7 +43,7 @@ tasks:
         temperature: 29.0
         ph: 6.2
         mutation_level: 0.65
-        performance_score: 0.0
+        performance_score: 0.001
         steps_count: 0
         stability_count: 0
       max_steps: 45
@@ -65,7 +65,7 @@ tasks:
         temperature: 20.0
         ph: 6.0
         mutation_level: 0.8
-        performance_score: 0.0
+        performance_score: 0.001
         steps_count: 0
         stability_count: 0
       max_steps: 50
