@@ -56,16 +56,19 @@ def list_tasks():
             {
                 "name": "easy",
                 "description": "Easy task with close initial conditions",
+                "score": 0.2,
                 "grader": {"metric": "final_performance_score", "threshold": 0.8},
             },
             {
                 "name": "medium",
                 "description": "Medium task with moderate initial conditions",
+                "score": 0.3,
                 "grader": {"metric": "final_performance_score", "threshold": 0.75},
             },
             {
                 "name": "hard",
                 "description": "Hard task with challenging initial conditions",
+                "score": 0.5,
                 "grader": {"metric": "final_performance_score", "threshold": 0.7},
             },
         ]

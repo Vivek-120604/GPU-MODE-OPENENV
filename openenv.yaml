@@ -12,6 +12,7 @@ environment:
 tasks:
   - name: "easy"
     description: "Easy task with close initial conditions"
+    score: 0.2
     params:
       task: "easy"
       seed: 42
@@ -33,6 +34,7 @@ tasks:
 
   - name: "medium"
     description: "Medium task with moderate initial conditions"
+    score: 0.3
     params:
       task: "medium"
       seed: 42
@@ -54,6 +56,7 @@ tasks:
 
   - name: "hard"
     description: "Hard task with challenging initial conditions"
+    score: 0.5
     params:
       task: "hard"
       seed: 42
