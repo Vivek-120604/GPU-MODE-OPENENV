@@ -188,12 +188,19 @@ def get_state():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for starting the environment server"""
     import uvicorn
     
+    logger.info("Starting BiologicalOptimizationEnv server...")
     uvicorn.run(
-        app,
+        "server.app:app",
         host="0.0.0.0",
         port=7860,
         log_level="info",
+        reload=False
     )
+
+
+if __name__ == "__main__":
+    main()

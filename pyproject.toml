@@ -21,7 +21,11 @@ dependencies = [
     "openai>=1.0.0",
     "requests>=2.31.0",
     "aiohttp>=3.9.0",
+    "openenv-core>=0.2.0",
 ]
+
+[project.scripts]
+openenv-bio-server = "server.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
