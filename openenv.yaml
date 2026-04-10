@@ -12,7 +12,6 @@ environment:
 tasks:
   - name: "easy"
     description: "Easy task with close initial conditions"
-    score: 0.2
     params:
       task: "easy"
       seed: 42
@@ -31,10 +30,10 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.8
       tolerance: 0.001
+      score: 0.2
 
   - name: "medium"
     description: "Medium task with moderate initial conditions"
-    score: 0.3
     params:
       task: "medium"
       seed: 42
@@ -53,10 +52,10 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.75
       tolerance: 0.001
+      score: 0.3
 
   - name: "hard"
     description: "Hard task with challenging initial conditions"
-    score: 0.5
     params:
       task: "hard"
       seed: 42
@@ -80,6 +79,7 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.7
       tolerance: 0.001
+      score: 0.49
 
 server:
   host: "0.0.0.0"
@@ -105,14 +105,14 @@ metrics:
   - name: "final_performance_score"
     description: "Final performance score achieved (0-1)"
     type: "float"
-    range: [0.0, 1.0]
+    range: [0.001, 0.999]
   - name: "total_steps"
     description: "Total number of steps taken"
     type: "integer"
   - name: "total_reward"
-    description: "Cumulative reward over episode"
+    description: "Accumulated reward"
     type: "float"
-    range: [0.0, 1.0]
+    range: [0.001, 0.999]
   - name: "success"
     description: "Whether the task was successfully completed"
     type: "boolean"
@@ -165,7 +165,7 @@ action_space:
 
 reward_function:
   type: "potential_based_shaping"
-  range: [0.0, 1.0]
+  range: [0.001, 0.999]
   components:
     - name: "performance_delta"
       weight: 0.5

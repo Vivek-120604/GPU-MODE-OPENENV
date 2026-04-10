@@ -53,7 +53,8 @@ class BiologicalOptimizationEnv(BaseEnvironment):
         self.temperature = 25.0
         self.ph = 7.0
         self.mutation_level = 0.5
-        self.performance_score = 0.0
+        self.performance_score = 0.001
+        self.cumulative_reward = 0.001
         self.steps_count = 0
         self.stability_count = 0
         self.last_performance = 0.0
@@ -108,6 +109,7 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             self.max_steps = 50
         
         self.steps_count = 0
+        self.cumulative_reward = 0.001
         self.stability_count = 0
         self.last_performance = 0.0
         self.improvement_streak = 0
@@ -121,6 +123,7 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             'adjust_mutation': 0
         }
         self.distinct_actions_used = set()
+        self.performance_score = self._calculate_performance_score()
         self.episode_info = {"task": task, "max_steps": self.max_steps}
     
     def reset(self, seed: int = None, task: str = "medium") -> Dict[str, Any]:
@@ -170,7 +173,8 @@ class BiologicalOptimizationEnv(BaseEnvironment):
         # This gives score close to 1 when near optimal, decays to ~0.05 at max distance
         score = np.exp(-3.0 * avg_dist)
         
-        return float(score)
+        # Strictly bound score to (0, 1) as required by validator
+        return float(max(0.001, min(0.999, score)))
     
     def _get_component_distances(self) -> Tuple[float, float, float]:
         """Get normalized distances for each component"""
@@ -368,8 +372,8 @@ class BiologicalOptimizationEnv(BaseEnvironment):
         elif action_type == "run_experiment":
             # Run experiment: update performance based on current conditions
             self.performance_score = self._calculate_performance_score()
-            # Small random improvement
-            self.performance_score = min(1.0, self.performance_score + self.rng.uniform(0, 0.05))
+            # Small random improvement, ensuring it never hits 1.0
+            self.performance_score = min(0.999, self.performance_score + self.rng.uniform(0, 0.05))
         
         # Update performance if not explicitly run
         if action_type != "run_experiment":
@@ -406,7 +410,7 @@ class BiologicalOptimizationEnv(BaseEnvironment):
         
         done = success or self.steps_count >= self.max_steps
         
-        # Calculate reward and clamp to [0.0, 1.0] (grader requirement)
+        # Calculate reward and strictly clamp to (0, 1) (grader requirement)
         reward = self._calculate_reward(
             action_type,
             old_performance,
@@ -414,7 +418,8 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             done,
             success
         )
-        reward = float(max(0.0, min(1.0, reward)))
+        reward = float(max(0.001, min(0.999, reward)))
+        self.cumulative_reward += reward
         
         # Calculate distances for logging clarity
         temp_dist, ph_dist, mutation_dist = self._get_component_distances()
@@ -430,7 +435,7 @@ class BiologicalOptimizationEnv(BaseEnvironment):
             # Grader metrics — must match openenv.yaml metric names exactly
             "final_performance_score": float(self.performance_score),
             "total_steps": int(self.steps_count),
-            "total_reward": float(reward),
+            "total_reward": float(max(0.001, min(0.999, self.cumulative_reward))),
             # Distance metrics for interpretability
             "distance_to_optimal": float(avg_distance),
             "temp_distance": float(temp_dist),
