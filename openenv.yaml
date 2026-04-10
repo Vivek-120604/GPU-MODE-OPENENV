@@ -12,6 +12,7 @@ environment:
 tasks:
   - name: "easy"
     description: "Easy task with close initial conditions"
+    score: 0.2
     params:
       task: "easy"
       seed: 42
@@ -30,10 +31,10 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.8
       tolerance: 0.001
-      score: 0.2
 
   - name: "medium"
     description: "Medium task with moderate initial conditions"
+    score: 0.3
     params:
       task: "medium"
       seed: 42
@@ -52,10 +53,10 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.75
       tolerance: 0.001
-      score: 0.3
 
   - name: "hard"
     description: "Hard task with challenging initial conditions"
+    score: 0.5
     params:
       task: "hard"
       seed: 42
@@ -79,7 +80,6 @@ tasks:
       metric: "final_performance_score"
       threshold: 0.7
       tolerance: 0.001
-      score: 0.49
 
 server:
   host: "0.0.0.0"
