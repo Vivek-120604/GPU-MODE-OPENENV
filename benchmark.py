@@ -14,7 +14,8 @@ from typing import Dict, Any, List
 import yaml
 
 # Local server (validator starts server automatically)
-BASE_URL = "http://0.0.0.0:7860"
+# NOTE: use loopback host instead of 0.0.0.0 for client requests.
+BASE_URL = "http://127.0.0.1:7860"
 
 def load_tasks() -> List[Dict[str, Any]]:
     """Load tasks + graders from openenv.yaml"""
@@ -130,4 +131,3 @@ def main():
 if __name__ == "__main__":
     import sys
     sys.exit(main())
-

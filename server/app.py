@@ -3,6 +3,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from typing import Optional
+from pathlib import Path
+import yaml
 
 from server.environment import BiologicalOptimizationEnv
 from server.models import (
@@ -51,25 +53,26 @@ def health_check():
 @app.get("/tasks", tags=["environment"])
 def list_tasks():
     """Return all available tasks — required by OpenEnv spec validators"""
-    return {
-        "tasks": [
+    config_path = Path(__file__).resolve().parent.parent / "openenv.yaml"
+    with config_path.open("r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    tasks = []
+    for task in config.get("tasks", []):
+        grader = dict(task.get("grader", {}))
+        score = float(grader.get("score", 0.5))
+        grader["score"] = min(0.999, max(0.001, score))
+
+        tasks.append(
             {
-                "name": "easy",
-                "description": "Easy task with close initial conditions",
-                "grader": {"metric": "final_performance_score", "threshold": 0.8, "score": 0.2},
-            },
-            {
-                "name": "medium",
-                "description": "Medium task with moderate initial conditions",
-                "grader": {"metric": "final_performance_score", "threshold": 0.75, "score": 0.3},
-            },
-            {
-                "name": "hard",
-                "description": "Hard task with challenging initial conditions",
-                "grader": {"metric": "final_performance_score", "threshold": 0.7, "score": 0.49},
-            },
-        ]
-    }
+                "name": task.get("name"),
+                "description": task.get("description", ""),
+                "params": task.get("params", {}),
+                "grader": grader,
+            }
+        )
+
+    return {"tasks": tasks}
 
 
 @app.post("/reset", tags=["environment"], response_model=StateResponse)
