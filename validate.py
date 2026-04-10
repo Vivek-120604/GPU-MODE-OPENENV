@@ -13,6 +13,11 @@ This script validates:
 
 import sys
 import os
+import yaml
+import requests
+import subprocess
+import json
+
 
 def test_imports():
     """Test all module imports"""
@@ -297,6 +302,7 @@ def main():
         ("State Bounds", test_state_bounds),
         ("FastAPI Server", test_api_server),
         ("Inference Client", test_inference_client),
+        ("Phase 2 Grader Benchmark", test_grader_benchmark),
     ]
     
     results = []
