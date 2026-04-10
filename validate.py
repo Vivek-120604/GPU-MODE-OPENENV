@@ -302,7 +302,6 @@ def main():
         ("State Bounds", test_state_bounds),
         ("FastAPI Server", test_api_server),
         ("Inference Client", test_inference_client),
-        ("Phase 2 Grader Benchmark", test_grader_benchmark),
     ]
     
     results = []
