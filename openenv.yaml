@@ -1,194 +1,32 @@
-# BiologicalOptimizationEnv OpenEnv Configuration
-title: "Biological Experiment Optimization"
-description: "Optimize biological experiment conditions (temperature, pH, mutation) to achieve target performance"
-version: "1.0.0"
-
-environment:
-  type: "python"
-  module: "server.environment"
-  class: "BiologicalOptimizationEnv"
-  base: "server.base.BaseEnvironment"
+spec_version: 1
+name: bio_env
+type: environment
+runtime: docker
+app: server.app:app
+port: 7860
 
 tasks:
-  - name: "easy"
-    description: "Easy task with close initial conditions"
-    params:
-      task: "easy"
-      seed: 42
-    config:
-      initial_state:
-        temperature: 35.0
-        ph: 7.2
-        mutation_level: 0.25
-        performance_score: 0.001
-        steps_count: 0
-        stability_count: 0
-      max_steps: 35
-      timeout: 300
+  - name: easy
+    description: Easy biological optimization task with close initial conditions
     grader:
-      type: "threshold"
-      metric: "final_performance_score"
-      threshold: 0.8
-      tolerance: 0.001
-      score: 0.2
+      metric: final_performance_score
+      endpoint: /grade
+      threshold: 0.60
+      score_range: [0.001, 0.999]
 
-  - name: "medium"
-    description: "Medium task with moderate initial conditions"
-    params:
-      task: "medium"
-      seed: 42
-    config:
-      initial_state:
-        temperature: 29.0
-        ph: 6.2
-        mutation_level: 0.65
-        performance_score: 0.001
-        steps_count: 0
-        stability_count: 0
-      max_steps: 45
-      timeout: 300
+  - name: medium
+    description: Medium biological optimization task with moderate initial conditions
     grader:
-      type: "threshold"
-      metric: "final_performance_score"
+      metric: final_performance_score
+      endpoint: /grade
       threshold: 0.75
-      tolerance: 0.001
-      score: 0.3
+      score_range: [0.001, 0.999]
 
-  - name: "hard"
-    description: "Hard task with challenging initial conditions"
-    params:
-      task: "hard"
-      seed: 42
-    config:
-      initial_state:
-        temperature: 20.0
-        ph: 6.0
-        mutation_level: 0.8
-        performance_score: 0.001
-        steps_count: 0
-        stability_count: 0
-      max_steps: 50
-      timeout: 300
-      constraints:
-        - "temperature range: [15, 45]"
-        - "pH range: [5, 9]"
-        - "mutation range: [0, 1]"
-        - "convergence tolerance required"
+  - name: hard
+    description: Hard biological optimization task with challenging initial conditions
     grader:
-      type: "threshold"
-      metric: "final_performance_score"
-      threshold: 0.7
-      tolerance: 0.001
-      score: 0.49
-
-server:
-  host: "0.0.0.0"
-  port: 7860
-  endpoints:
-    - path: "/"
-      method: "GET"
-      description: "Health check — returns 200 with status ok"
-    - path: "/reset"
-      method: "POST"
-      description: "Reset environment to initial state"
-    - path: "/step"
-      method: "POST"
-      description: "Execute one step in the environment"
-    - path: "/state"
-      method: "GET"
-      description: "Get current environment state"
-    - path: "/tasks"
-      method: "GET"
-      description: "List available tasks"
-
-metrics:
-  - name: "final_performance_score"
-    description: "Final performance score achieved (0-1)"
-    type: "float"
-    range: [0.001, 0.999]
-  - name: "total_steps"
-    description: "Total number of steps taken"
-    type: "integer"
-  - name: "total_reward"
-    description: "Accumulated reward"
-    type: "float"
-    range: [0.001, 0.999]
-  - name: "success"
-    description: "Whether the task was successfully completed"
-    type: "boolean"
-
-state_space:
-  temperature:
-    type: "float"
-    min: 15.0
-    max: 45.0
-    description: "Temperature in Celsius"
-  ph:
-    type: "float"
-    min: 5.0
-    max: 9.0
-    description: "pH level"
-  mutation_level:
-    type: "float"
-    min: 0.0
-    max: 1.0
-    description: "Mutation level in normalized range"
-  performance_score:
-    type: "float"
-    min: 0.0
-    max: 1.0
-    description: "Performance score based on condition optimization"
-  steps_count:
-    type: "integer"
-    description: "Number of steps taken in current episode"
-  stability_count:
-    type: "integer"
-    description: "Number of consecutive stable steps"
-
-action_space:
-  action_type:
-    type: "string"
-    options:
-      - "adjust_temperature"
-      - "adjust_ph"
-      - "adjust_mutation"
-      - "run_experiment"
-    description: "Type of action to execute"
-  value:
-    type: "float"
-    description: "Adjustment value (ignored for run_experiment)"
-    ranges:
-      adjust_temperature: [-5.0, 5.0]
-      adjust_ph: [-1.0, 1.0]
-      adjust_mutation: [-0.2, 0.2]
-      run_experiment: [0.0, 0.0]
-
-reward_function:
-  type: "potential_based_shaping"
-  range: [0.001, 0.999]
-  components:
-    - name: "performance_delta"
-      weight: 0.5
-      description: "Change in performance score"
-    - name: "stability_bonus"
-      value: 0.1
-      condition: "stability_count >= 2"
-      description: "Bonus for maintaining stable conditions"
-    - name: "experiment_success_bonus"
-      value: 0.5
-      condition: "run_experiment action with success"
-      description: "Bonus for successful experiment execution"
-    - name: "experiment_failure_penalty"
-      value: -0.5
-      condition: "run_experiment action without success"
-      description: "Penalty for premature experiment"
-
-termination_conditions:
-  - name: "success"
-    description: "Performance >= 0.85 AND stability >= 2 steps"
-    condition: "performance_score >= 0.85 and stability_count >= 2"
-    terminal: true
-  - name: "max_steps"
-    description: "Maximum steps reached"
-    condition: "steps_count >= max_steps"
-    terminal: true
+      metric: final_performance_score
+      endpoint: /grade
+      threshold: 0.85
+      score_range: [0.001, 0.999]
+      
