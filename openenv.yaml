@@ -7,26 +7,22 @@ port: 7860
 
 tasks:
   - name: easy
-    description: Easy biological optimization task with close initial conditions
+    description: Easy biological optimization task
     grader:
       metric: final_performance_score
-      endpoint: /grade
       threshold: 0.60
-      score_range: [0.001, 0.999]
+      score: 0.5
 
   - name: medium
-    description: Medium biological optimization task with moderate initial conditions
+    description: Medium biological optimization task
     grader:
       metric: final_performance_score
-      endpoint: /grade
       threshold: 0.75
-      score_range: [0.001, 0.999]
+      score: 0.5
 
   - name: hard
-    description: Hard biological optimization task with challenging initial conditions
+    description: Hard biological optimization task
     grader:
       metric: final_performance_score
-      endpoint: /grade
       threshold: 0.85
-      score_range: [0.001, 0.999]
-      
+      score: 0.5
