@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+import math
 from typing import Optional
 
 from server.environment import BiologicalOptimizationEnv
@@ -37,37 +38,24 @@ app.add_middleware(
 # Global environment instance
 env: Optional[BiologicalOptimizationEnv] = None
 
-# Task configuration — thresholds and score ranges strictly in (0, 1)
+# Task configuration
 TASK_CONFIG = {
-    "easy":   {"threshold": 0.60, "max_steps": 50},
+    "easy":   {"threshold": 0.60, "max_steps": 35},
     "medium": {"threshold": 0.75, "max_steps": 45},
     "hard":   {"threshold": 0.85, "max_steps": 40},
 }
 
 
 def _compute_grade(task: str, performance_score: float) -> float:
-    """
-    Compute a grade strictly in (0, 1) — never exactly 0.0 or 1.0.
-    
-    Formula: sigmoid-like mapping so score is always in (0.001, 0.999).
-    """
-    cfg = TASK_CONFIG.get(task, TASK_CONFIG["medium"])
-    threshold = cfg["threshold"]
-
-    # Normalise: how far above/below threshold (range roughly -2 to +2)
+    """Compute grade strictly in (0, 1) using sigmoid."""
+    threshold = TASK_CONFIG.get(task, TASK_CONFIG["medium"])["threshold"]
     normalised = (performance_score - threshold) / max(threshold, 0.1)
-
-    # Sigmoid maps any real number to (0, 1) — never touches the bounds
-    import math
     raw = 1.0 / (1.0 + math.exp(-3.0 * normalised))
-
-    # Extra safety clamp: keep strictly inside (0.001, 0.999)
     return max(0.001, min(0.999, raw))
 
 
 @app.get("/", tags=["health"])
 def health_check():
-    """Health check endpoint — must return 200 for HF Space ping"""
     return {
         "status": "ok",
         "service": "BiologicalOptimizationEnv",
@@ -77,7 +65,7 @@ def health_check():
 
 @app.get("/tasks", tags=["environment"])
 def list_tasks():
-    """Return all available tasks with grader definitions — required by OpenEnv spec"""
+    """Return all available tasks — required by OpenEnv spec validators."""
     return {
         "tasks": [
             {
@@ -87,6 +75,7 @@ def list_tasks():
                     "metric": "final_performance_score",
                     "threshold": TASK_CONFIG["easy"]["threshold"],
                     "max_steps": TASK_CONFIG["easy"]["max_steps"],
+                    "score": 0.5,
                 },
             },
             {
@@ -96,6 +85,7 @@ def list_tasks():
                     "metric": "final_performance_score",
                     "threshold": TASK_CONFIG["medium"]["threshold"],
                     "max_steps": TASK_CONFIG["medium"]["max_steps"],
+                    "score": 0.5,
                 },
             },
             {
@@ -105,6 +95,7 @@ def list_tasks():
                     "metric": "final_performance_score",
                     "threshold": TASK_CONFIG["hard"]["threshold"],
                     "max_steps": TASK_CONFIG["hard"]["max_steps"],
+                    "score": 0.5,
                 },
             },
         ]
@@ -115,19 +106,8 @@ def list_tasks():
 def grade(request: dict):
     """
     Grade a completed episode.
-
-    Expected request body:
-        {
-            "task": "easy" | "medium" | "hard",
-            "episode_result": {
-                "performance_score": float,   # final performance score
-                "success": bool,
-                "steps": int
-            }
-        }
-
-    Returns:
-        {"score": float}   where score is strictly in (0, 1)
+    Expected: {"task": "easy"|"medium"|"hard", "episode_result": {"performance_score": float}}
+    Returns:  {"score": float}  strictly in (0, 1)
     """
     try:
         task = request.get("task", "medium")
@@ -135,16 +115,13 @@ def grade(request: dict):
             raise HTTPException(status_code=400, detail=f"Unknown task '{task}'")
 
         episode_result = request.get("episode_result", {})
-
-        # Accept performance_score from episode_result or fall back to state
         performance_score = float(
             episode_result.get("performance_score",
             episode_result.get("final_performance_score", 0.0))
         )
 
         score = _compute_grade(task, performance_score)
-
-        logger.info(f"Grade computed: task={task}, perf={performance_score:.4f}, score={score:.4f}")
+        logger.info(f"Grade: task={task}, perf={performance_score:.4f}, score={score:.4f}")
         return {"score": score}
 
     except HTTPException:
@@ -156,7 +133,7 @@ def grade(request: dict):
 
 @app.post("/reset", tags=["environment"], response_model=StateResponse)
 def reset(request: ResetRequest = None):
-    """Reset the environment"""
+    """Reset the environment."""
     global env
 
     try:
@@ -191,7 +168,7 @@ def reset(request: ResetRequest = None):
 
 @app.post("/step", tags=["environment"], response_model=Observation)
 def step(request: StepRequest):
-    """Execute one step in the environment"""
+    """Execute one step in the environment."""
     global env
 
     try:
@@ -227,7 +204,7 @@ def step(request: StepRequest):
 
 @app.get("/state", tags=["environment"], response_model=StateResponse)
 def get_state():
-    """Get current environment state without stepping"""
+    """Get current environment state without stepping."""
     global env
 
     try:
