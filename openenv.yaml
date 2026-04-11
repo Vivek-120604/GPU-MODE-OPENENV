@@ -1,28 +1,20 @@
 spec_version: 1
 name: bio_env
-type: environment
-runtime: docker
 app: server.app:app
 port: 7860
-
+ 
 tasks:
-  - name: easy
-    description: Easy biological optimization task
-    grader:
-      metric: final_performance_score
-      threshold: 0.60
-      score: 0.5
-
-  - name: medium
-    description: Medium biological optimization task
-    grader:
-      metric: final_performance_score
-      threshold: 0.75
-      score: 0.5
-
-  - name: hard
-    description: Hard biological optimization task
-    grader:
-      metric: final_performance_score
-      threshold: 0.85
-      score: 0.5
+  - id: easy_task
+    name: Easy Task
+    difficulty: easy
+    grader: server.graders:EasyGrader
+ 
+  - id: medium_task
+    name: Medium Task
+    difficulty: medium
+    grader: server.graders:MediumGrader
+ 
+  - id: hard_task
+    name: Hard Task
+    difficulty: hard
+    grader: server.graders:HardGrader
